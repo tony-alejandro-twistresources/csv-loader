@@ -61,7 +61,7 @@ var ProductLoader = {
 
 		console.log("Pass 1: Validation")
 		var stream = fs.createReadStream(csvfile);
-		stream.on('error', function (error) {console.log("Caught", error);bomb('CSV file error.')});
+		stream.on('error', function (error) {console.log("Caught", error);ProductLoader.bomb('CSV file error.')});
 
 		// Verify each line of the CSV file
 		var count = 0;
@@ -86,7 +86,7 @@ var ProductLoader = {
 		.on('end', function(count){
 			console.log("Done reading csv file with " + count + " records.");
 			if( lineErrors != ""){
-				bomb(lineErrors.substr(0, lineErrors.length - 1));
+				ProductLoader.bomb(lineErrors.substr(0, lineErrors.length - 1));
 			}
 			next();
 		})
@@ -104,7 +104,7 @@ var ProductLoader = {
 
 		console.log("Retrieving Dropshipper -> Metrosix category mapping.");
 		var stream = fs.createReadStream("./code/category-mapping.csv");
-		stream.on('error', function (error) {console.log("Caught", error);bomb('CSV file error.')});
+		stream.on('error', function (error) {console.log("Caught", error);ProductLoader.bomb('CSV file error.')});
 
 		var categoryMap = [];
 
@@ -125,14 +125,14 @@ var ProductLoader = {
 	},// end initializeCategoryMapping
 
 	/**
-	*	Loads the csv file that contains the mapping of variances
+	*	Loads the csv file that contains the mapping of variance types
 	*	and places it in a property map.
 	*/
 	initializeVarianceMapping : function (next){
 
 		console.log("Retrieving variance mapping.");
 		var stream = fs.createReadStream("./code/variance-mapping.csv");
-		stream.on('error', function (error) {console.log("Caught", error);bomb('CSV file error.')});
+		stream.on('error', function (error) {console.log("Caught", error);ProductLoader.bomb('CSV file error.')});
 
 		var varianceMap = [];
 
@@ -174,12 +174,12 @@ var ProductLoader = {
 			json: json },
 			function (error, response, body) {
 				if (error) {
-			        bomb("Unexpected error: ", error);
+					ProductLoader.bomb("Unexpected error: ", error);
 				} else if (response.statusCode != 200) {
-			        bomb("Unexpected status code " + response.statusCode);
+					ProductLoader.bomb("Unexpected status code " + response.statusCode);
 				} else {
 					if(body == undefined || body.response == "Error"){
-						bomb("Failed to retrieve category IDs.")
+						ProductLoader.bomb("Failed to retrieve category IDs.")
 					}
 					for (var i = body.categories.length - 1; i >= 0; i--) {
 						categoryIds[body.categories[i].name.trim()] = body.categories[i].category_id;
@@ -200,7 +200,7 @@ var ProductLoader = {
 	parseDetails : function(credentials, csvfile, next){
 		console.log("Pass 2: Load Details")
 		var stream = fs.createReadStream(csvfile);
-		stream.on('error', function (error) {console.log("Caught", error);bomb('CSV file error.')});
+		stream.on('error', function (error) {console.log("Caught", error);ProductLoader.bomb('CSV file error.')});
 
 		// Load csv file rows into a map
 		var count = 0;
@@ -214,7 +214,7 @@ var ProductLoader = {
 			ProductLoader.insertVariant(products, ProductLoader.createVariant(item));
 		})
 		.on('end', function(count){
-			console.log("Done reading csv file with " + count + " products in " + products.length + " categories.");
+			console.log("Done reading csv file with " + count + " records with " + products.length + " products.");
 			ProductLoader.products = products;
 			next();
 		})
@@ -244,12 +244,12 @@ var ProductLoader = {
 		}, function (error, response, body) {
 
 			if (error) {
-		        bomb("Unexpected error: ", error);
+				ProductLoader.bomb("Unexpected error: ", error);
 			} else if (response.statusCode != 200) {
-		        bomb("Unexpected status code " + response.statusCode);
+				ProductLoader.bomb("Unexpected status code " + response.statusCode);
 			} else {
 				if (body === undefined || body.response !== 'Success') {
-					bomb('ERROR: response="' + body.response + '", message="' + body.message + '"');
+					ProductLoader.bomb('ERROR: response="' + body.response + '", message="' + body.message + '"');
 				} else {
 					console.log("Successfully saved products.");
 				}
@@ -265,24 +265,27 @@ var ProductLoader = {
 	*	retrieved from the csv file.
 	*/
 	createVariant: function(item){
-		
 		var variant = {
 			categoryId : ProductLoader.categoryIdMap[ProductLoader.categoryMap[item.Categories]],
-			product  : {
-				name : item.Name,
-				short_description : item.Summary,
-				long_description : item.Description,
-				sku : item.Sku,
-				cost_price : item.Price,
-				weight : item.Weight,
-				variant_value : item.option,
-				variant_type : ProductLoader.varianceMap[(item.option + "").toLowerCase()],
-				image : {
-					image_type : ProductLoader.getImageExtension(item.ImageUrl),
-					image_path : item.ImageUrl,
-					image_name : ProductLoader.getImageName(item.ImageUrl)
-				}
-			}
+			productName : item.Name,
+			shortDescription : item.Summary,
+			longDescription : item.Description,
+			sku : item.Sku,
+			costPrice : item.Price,
+			weight : item.Weight,
+			variant_value : item.option,
+			variant_type : ProductLoader.varianceMap[(item.option + "").toLowerCase()],
+			image_type : ProductLoader.getImageExtension(item.ImageUrl),
+			image_path : item.ImageUrl,
+			image_name : ProductLoader.getImageName(item.ImageUrl),
+			//properties below are hard coded since they are not provided in the dropshipper's file
+			isDisplayed : true,
+			teaIdAtSource : 0,
+			metaTitle : null,
+			metaDescription : null,
+			metaKeyword : null,
+			serialNo : null,
+			statusOnly : "1"
 		}
 		return variant;
 	}, // end createVariant method
@@ -292,30 +295,19 @@ var ProductLoader = {
 	*	Places items under categories for more efficient storage during
 	*	persist stage.
 	*/
-	insertVariant : function(categories, itemVariant){
-		var categoryIndex = ProductLoader.findInList(categories, itemVariant.categoryId);
-		if( categoryIndex != -1 ){ // item's category was found
-			var productIndex = ProductLoader.findInList(categories[categoryIndex].products, itemVariant.product.name);
-			if( productIndex != -1 ){ // item product was found
-				categories[categoryIndex].products[productIndex].variants.push(itemVariant);
-			} else { // add a new product under this category
-				categories[categoryIndex].products.push({
-					id : itemVariant.product.name,
-					variants : [itemVariant]
-				});
-			} 
-		} else { // add a new category with this item as the first product variant
+	insertVariant : function(products, itemVariant){
+		var productIndex = ProductLoader.findInList(products, itemVariant.productName);
+		if( productIndex != -1 ){ // item product was found
+			products[productIndex].variants.push(itemVariant);
+		} else { // add a new product under this category
 			// uncomment if products with no category will not be uploaded.
 			//if(itemVariant.categoryId == undefined){
 			//	console.log("Item : " + itemVariant.product.name + " will not be uploaded since it does not have a category.");
 			//} else {
-				categories.push({
-					id : itemVariant.categoryId,
-					products : [{
-						name : itemVariant.product.name,
-						variants : [itemVariant]
-					}]
-				});
+			products.push({
+				name : itemVariant.productName,
+				variants : [itemVariant]
+			});
 			//}
 		}
 	}, // end insertVariant method
@@ -342,9 +334,9 @@ var ProductLoader = {
 	*	Convenience method for locating an object in a list using
 	*	its id property.
 	*/
-	findInList : function(list, id){
+	findInList : function(list, name){
 		for (var i = list.length - 1; i >= 0; i--) {
-			if(list[i].id === id) return i;
+			if(list[i].name === name) return i;
 		}
 		return -1;
 	},
