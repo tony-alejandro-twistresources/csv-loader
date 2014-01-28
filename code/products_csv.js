@@ -15,7 +15,7 @@ exports.load = function(host, accessToken, sourceId, csvfile) {
 }
 
 var ProductLoader = {
-
+	
 	headers : [ 'Name', 'Price', 'Weight', 'Manufacturer', 'Sku',
   				'Summary', 'Description', 'Categories', 'ImageUrl',
   				'Sub_ImageUrl', 'option' ],
@@ -142,7 +142,7 @@ var ProductLoader = {
 			varianceMap[(variantInfo.Variance + "").toLowerCase()] = variantInfo.Type;	
 		})
 		.on('end', function(count){
-			console.log("Done reading csv file with " + count + " variances.");
+			console.log("Done reading csv file with " + count + " variant types.");
 			ProductLoader.varianceMap = varianceMap;
 			next();
 		})
@@ -211,6 +211,7 @@ var ProductLoader = {
 		csv()
 		.from.stream(stream, { columns : true })
 		.on('record', function(item){
+			
 			ProductLoader.insertVariant(products, ProductLoader.createVariant(item));
 		})
 		.on('end', function(count){
@@ -273,12 +274,15 @@ var ProductLoader = {
 			sku : item.Sku,
 			costPrice : item.Price,
 			weight : item.Weight,
-			variant_value : item.option,
-			variant_type : ProductLoader.varianceMap[(item.option + "").toLowerCase()],
-			image_type : ProductLoader.getImageExtension(item.ImageUrl),
-			image_path : item.ImageUrl,
-			image_name : ProductLoader.getImageName(item.ImageUrl),
+			varianceValue : ProductLoader.varianceMap[(item.option + "").toLowerCase()] ? item.option : null,
+			variance : ProductLoader.varianceMap[(item.option + "").toLowerCase()],
+			imageType : ProductLoader.getImageExtension(item.ImageUrl),
+			imagePath : item.ImageUrl,
+			imageName : ProductLoader.getImageName(item.ImageUrl),
 			//properties below are hard coded since they are not provided in the dropshipper's file
+			quantity : 0,
+			barcode : null,
+			format : "",
 			isDisplayed : true,
 			teaIdAtSource : 0,
 			metaTitle : null,
