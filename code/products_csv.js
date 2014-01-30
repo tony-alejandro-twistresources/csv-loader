@@ -1,6 +1,7 @@
 var csv = require("csv"),
 	fs = require("fs"),
-	request = require('request');	
+	request = require('request'),
+	strip = require('strip');	
 	
 
 exports.load = function(host, accessToken, sourceId, csvfile) {
@@ -268,9 +269,10 @@ var ProductLoader = {
 	createVariant: function(item){
 		var variant = {
 			categoryId : ProductLoader.categoryIdMap[ProductLoader.categoryMap[item.Categories]],
-			productName : item.Name,
-			shortDescription : item.Summary,
-			longDescription : item.Description,
+			productName : item.Name.substring(0,100),  // fix for long names
+			manufacturer : item.Manufacturer,
+			shortDescription : strip(item.Summary),
+			longDescription : strip(item.Description),
 			sku : item.Sku,
 			costPrice : item.Price,
 			weight : item.Weight,
@@ -289,7 +291,7 @@ var ProductLoader = {
 			metaDescription : null,
 			metaKeyword : null,
 			serialNo : null,
-			statusOnly : "1"
+			statusOnly : "0"
 		}
 		return variant;
 	}, // end createVariant method
